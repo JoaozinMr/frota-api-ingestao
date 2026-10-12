@@ -1,0 +1,54 @@
+# Laboratório local: um broker tolera falha de Worker, não perda do broker/disco.
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.1
+    command:
+      - redpanda
+      - start
+      - --mode
+      - dev-container
+      - --smp
+      - '1'
+      - --kafka-addr
+      - internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - internal://redpanda:9092,external://localhost:19092
+    ports:
+      - '127.0.0.1:19092:19092'
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ['CMD', 'rpk', 'cluster', 'health', '--exit-when-healthy']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  init-topics:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.1
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - >-
+        (rpk topic describe frota.telemetria -X brokers=redpanda:9092 >/dev/null 2>&1 ||
+        rpk topic create frota.telemetria -p 6 -r 1 -X brokers=redpanda:9092) &&
+        (rpk topic describe frota.telemetria.dlq -X brokers=redpanda:9092 >/dev/null 2>&1 ||
+        rpk topic create frota.telemetria.dlq -p 6 -r 1 -X brokers=redpanda:9092)
+
+  api-ingestao:
+    build: .
+    ports:
+      - '127.0.0.1:8081:8080'
+    environment:
+      Kafka__BootstrapServers: redpanda:9092
+      Kafka__Topic: frota.telemetria
+      Kafka__DlqTopic: frota.telemetria.dlq
+    depends_on:
+      init-topics:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  redpanda-data:

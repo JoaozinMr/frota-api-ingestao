@@ -1,0 +1,33 @@
+### API viva (não verifica broker)
+GET http://localhost:8081/health
+
+### Broker e tópicos disponíveis
+GET http://localhost:8081/health/ready
+
+### Válido: esperado 202
+POST http://localhost:8081/api/telemetry
+Content-Type: application/json
+X-Correlation-ID: dff740d3-9636-486b-9da3-95d0259d3556
+
+{
+  "id_evento": "c12b3efe-f5ef-4857-bad4-a2a791494e01",
+  "id_veiculo": "CAM-001",
+  "sequencia": 123,
+  "timestamp": "2026-10-06T19:30:00Z",
+  "latitude": -19.9191,
+  "longitude": -43.9386,
+  "velocidade": 72.5,
+  "motor_ligado": true
+}
+
+### Inválido: esperado 400 após confirmar publicação na DLQ
+POST http://localhost:8081/api/telemetry
+Content-Type: application/json
+
+{"latitude": 999}
+
+### Corrompido: esperado 400 após confirmar publicação na DLQ
+POST http://localhost:8081/api/telemetry
+Content-Type: application/json
+
+{broken
