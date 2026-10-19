@@ -20,6 +20,21 @@ X-Correlation-ID: dff740d3-9636-486b-9da3-95d0259d3556
   "motor_ligado": true
 }
 
+### Motor desligado: esperado 202; publicado com status_motor = "DESLIGADO"
+POST http://localhost:8081/api/telemetry
+Content-Type: application/json
+
+{
+  "id_evento": "5b0f6a51-2d8e-4f3c-9d0a-7c1e2b3a4d5f",
+  "id_veiculo": "CAM-001",
+  "sequencia": 124,
+  "timestamp": "2026-10-06T19:31:00Z",
+  "latitude": -19.9191,
+  "longitude": -43.9386,
+  "velocidade": 0,
+  "motor_ligado": false
+}
+
 ### Inválido: esperado 400 após confirmar publicação na DLQ
 POST http://localhost:8081/api/telemetry
 Content-Type: application/json

@@ -1,0 +1,71 @@
+# Stack opcional de integração local (Ingestão -> Redpanda -> Worker -> API de Alertas).
+# Sobreposto ao compose.yaml, que continua sendo o laboratório isolado padrão:
+#   docker compose -f compose.yaml -f compose.integration.yaml up --build -d
+# Espera os repositórios irmãos ao lado deste (../frota-worker-processamento, ../frota-api-alertas).
+# Não substitui o Compose do repositório de Infraestrutura.
+services:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - '127.0.0.1:6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  postgres:
+    # TimescaleDB é opcional para o Worker (cai para tabela comum), mas é o alvo do plano.
+    image: timescale/timescaledb:2.17.2-pg16
+    environment:
+      POSTGRES_DB: frota
+      POSTGRES_USER: frota
+      POSTGRES_PASSWORD: frota
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U frota -d frota']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api-alertas:
+    build: ../frota-api-alertas
+    ports:
+      - '127.0.0.1:5100:8080'
+    environment:
+      Postgres__ConnectionString: Host=postgres;Port=5432;Database=frota;Username=frota;Password=frota
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: ../frota-worker-processamento
+    ports:
+      - '127.0.0.1:8082:8080'
+    environment:
+      # Listener interno do Redpanda (o externo localhost:19092 só serve ao host).
+      Kafka__BootstrapServers: redpanda:9092
+      Kafka__Topic: frota.telemetria
+      Kafka__DlqTopic: frota.telemetria.dlq
+      Redis__ConnectionString: redis:6379
+      Postgres__ConnectionString: Host=postgres;Port=5432;Database=frota;Username=frota;Password=frota
+      Alertas__BaseUrl: http://api-alertas:8080
+    depends_on:
+      init-topics:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      api-alertas:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

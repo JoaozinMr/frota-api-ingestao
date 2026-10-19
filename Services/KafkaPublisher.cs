@@ -27,18 +27,24 @@ public sealed class KafkaPublisher : IDisposable
     }
 
     public Task<DeliveryResult<string, string>> PublishAsync(
-        string topic, string key, string payload, string correlationId)
+        string topic, string key, string payload, string correlationId,
+        IReadOnlyDictionary<string, string>? extraHeaders = null)
     {
+        var headers = new Headers
+        {
+            { "X-Correlation-ID", Encoding.UTF8.GetBytes(correlationId) }
+        };
+        if (extraHeaders is not null)
+            foreach (var (name, value) in extraHeaders)
+                headers.Add(name, Encoding.UTF8.GetBytes(value));
+
         // Não cancelar a espera quando o cliente HTTP desconectar: uma mensagem
         // enfileirada pode ser publicada mesmo depois de RequestAborted.
         return _producer.ProduceAsync(topic, new Message<string, string>
         {
             Key = key,
             Value = payload,
-            Headers = new Headers
-            {
-                { "X-Correlation-ID", Encoding.UTF8.GetBytes(correlationId) }
-            }
+            Headers = headers
         });
     }
 
